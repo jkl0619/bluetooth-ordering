@@ -26,7 +26,7 @@ channel.queue_declare(queue = _queue)
 
 
 print('[Checkpoint] Connected to vhost %s on RMQ server at %s as user %s', _host, _IP, _user')
-
+      
 def callback(ch, method, properties, body):
 	print('[Checkpoint] Consuming from RMQ queue: %s', _queue)
 
