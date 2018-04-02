@@ -1,4 +1,4 @@
-rmq_params = {"vhost": "Assignment 1",
+rmq_params = {"vhost": "Assignment1",
               "username": "test1",
               "password": "test1",
               "exchange": "ass1",
