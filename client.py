@@ -6,9 +6,7 @@ import socket
 from clientKeys import *
 import optparse
 import pika
-import hashlib, pickle
-import os
-import sys
+import time
 
 # -s RMQ IP OR HOST NAME -b BLUETOOTH ADDRESS
 # Parse through the arguments
@@ -25,7 +23,7 @@ print("[Checkpoint] Connecting to " + host, " on " + bluetooth)
 #connect to the RabbitMQ
 connection = pika.BlockingConnection(pika.ConnectionParameters(host))
 channel = connection.channel()
-channel.queue_declare(queue='menu')
+#should not declare exchanges or queues channel.queue_declare(queue='menu')
 print("[Checkpoint] Connected")
 
 #define callback method
@@ -36,8 +34,8 @@ def callback(ch, method, properties, body):
     channel.basic_publish(exchange='', routing_key='OrderList', body=orderList)
     print(" [Checkpoint] Sent Order: " + orderList)
 
-def callback_receipt(ch, method, properties, body)
-    print (" [Checkpoint] Received receipt: ")
+def callback_receipt(ch, method, properties, body):
+    print (" [Checkpoint] Received receipt: %r" % body)
 
 #set our channel to receive messages from the queue
 channel.basic_consume(callback, queue='hello', no_ack=True)
