@@ -6,6 +6,7 @@ import socket
 import optparse
 import pika
 import time
+import rmq_params as param
 from bluetooth import *
 
 # -s RMQ IP OR HOST NAME -b BLUETOOTH ADDRESS
@@ -27,10 +28,24 @@ data = client_socket.recv(1024)
 
 print(" [Checkpoint] Received Menu: %r" % data)
 
-orderList = input("Enter items separated by space characters:")
+print("Enter items separated by space characters:")
+orderList = input()
 client_socket.send(orderList)
+print(" [Checkpoint] Sent order: ")
+print(orderList)
 
-credentials = pika.PlainCredentials("test1", "test1")
+orderID = client_socket.recv(1024)
+items = client_socket.recv(1024)
+totalPrice = client_socket.recv(1024)
+totalTime = client_socket.recv(1024)
+print(" [Checkpoint] Received receipt: ")
+print(orderID)
+print(items)
+print(totalPrice)
+print(totalTime)
+
+
+credentials = pika.PlainCredentials(param.rmq_params["username"], param.rmq_params["password"])
 
 #connect to the RabbitMQ
 connection = pika.BlockingConnection(pika.ConnectionParameters(host, credentials=credentials))
