@@ -3,10 +3,10 @@
 
 # """A simple echo client"""
 import socket
-from clientKeys import *
 import optparse
 import pika
 import time
+from bluetooth import *
 
 # -s RMQ IP OR HOST NAME -b BLUETOOTH ADDRESS
 # Parse through the arguments
@@ -18,19 +18,28 @@ parser.add_option('-b', dest='bluetooth', help='The bluetooth address')
 # initialize values from command line
 host = options.host
 bluetooth = options.bluetooth
+
+#connect to bluetooth
+client_socket=BluetoothSocket(RFCOMM)
+client_socket.connect((bluetooth,3))
 print("[Checkpoint] Connecting to " + host, " on " + bluetooth)
+data = client_socket.recv(1024)
+
+print(" [Checkpoint] Received Menu: %r" % data)
+
+orderList = input("Enter items separated by space characters:")
+client_socket.send(orderList)
+
+credentials = pika.PlainCredentials("test1", "test1")
 
 #connect to the RabbitMQ
-connection = pika.BlockingConnection(pika.ConnectionParameters(host))
+connection = pika.BlockingConnection(pika.ConnectionParameters(host, credentials=credentials))
 channel = connection.channel()
 #should not declare exchanges or queues channel.queue_declare(queue='menu')
 print("[Checkpoint] Connected")
 
 #define callback method
 def callback(ch, method, properties, body):
-    print(" [Checkpoint] Received Menu: %r" % body)
-    print("Enter items separated by space characters:" )
-    orderList = input(str(x) for x in input().split())
     channel.basic_publish(exchange='', routing_key='OrderList', body=orderList)
     print(" [Checkpoint] Sent Order: " + orderList)
 
@@ -38,5 +47,5 @@ def callback_receipt(ch, method, properties, body):
     print (" [Checkpoint] Received receipt: %r" % body)
 
 #set our channel to receive messages from the queue
-channel.basic_consume(callback, queue='hello', no_ack=True)
+#channel.basic_consume(callback, queue='hello', no_ack=True)
 
