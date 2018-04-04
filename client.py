@@ -57,14 +57,16 @@ print(" [Checkpoint] Closed Bluetooth Connection")
 credentials = pika.PlainCredentials(param.rmq_params["username"], param.rmq_params["password"])
 
 #connect to the RabbitMQ
-connection = pika.BlockingConnection(pika.ConnectionParameters(host, credentials=credentials))
+connection = pika.BlockingConnection(pika.ConnectionParameters(host, credentials=credentials, virtual_host=param.rmq_params["vhost"]))
 channel = connection.channel()
 
 print(" [Checkpoint] Connected to vhost " + param.rmq_params["vhost"], "on RMQ server at " + host, " as user " + param.rmq_params["username"])
 
 #define callback method
 def callback(ch, method, properties, body):
-	print("Order Update: " + body)
+	print("Order Update: " + body.decode('utf-8'))
+	if(body.decode('utf-8') == "We finished processing your order."):
+		connection.close()
 
 channel.queue_bind(exchange=param.rmq_params["exchange"],queue=orderID)
 channel.basic_consume(callback, queue=orderID, no_ack=True)
