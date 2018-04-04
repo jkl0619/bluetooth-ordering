@@ -12,7 +12,9 @@ Things to be aware of:
 Whatever vhost is being used along with the user, the user has to be added into the 
 rabbitmq system along with the vhost. Also, the Vhost needs to grant the user permission 
 to everything by using:
-rabbitmqctl set_permissions -p vhostName UserName ".*" ".*" ".*"
+rabbitmqctl set_permissions -p vhostName UserName 
+
+After the username, it should be .* .* .* with each set of those enclosed by quotations
 
 Rabbitmq server has to be running as well
 
