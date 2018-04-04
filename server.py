@@ -6,105 +6,122 @@ import menu
 from bluetooth import *
 
 
-ID = '69'          #change to be client queue
-
-
-_host = '172.29.71.135'
+##obtain information from the rmq_params file
+_host = '192.168.1.7'
 _user = rmq_params.rmq_params['username']
 _vhost = rmq_params.rmq_params['vhost']
 _pass = rmq_params.rmq_params['password']
 _exc = rmq_params.rmq_params['exchange']
 
+##creating RMQ server and defining the queues
 credentials = pika.PlainCredentials(_user, _pass)
-connection = pika.BlockingConnection(pika.ConnectionParameters( host= _host, credentials = credentials))
+connection = pika.BlockingConnection(pika.ConnectionParameters( host= _host, credentials = credentials, virtual_host = _vhost))
 print('[Checkpoint] Connected to vhost '+_vhost+' on RMQ server at '+_host+' as user '+_user)
 print('[Checkpoint] Setting up exchanges and queues...')
 channel = connection.channel()
 channel.exchange_declare(exchange = _exc)
-channel.queue_declare(queue=rmq_params.rmq_params['order_queue'])
-channel.queue_declare(queue=rmq_params.rmq_params['led_queue'])
-#channel.queue_declare(queue='client')
-
-#channel.basic_publish(exchange=_exc,
-#	routing_key='order',
-#	body='fuck you')
-
-# routing_key = which queue
-# body = the message to be sent
-
-connection.close() #after sending the data to queue
+channel.queue_declare(queue=rmq_params.rmq_params['order_queue'], auto_delete = True)
+channel.queue_declare(queue=rmq_params.rmq_params['led_queue'], auto_delete = True)
+channel.queue_bind(exchange = _exc, queue = rmq_params.rmq_params['order_queue'])
+channel.queue_bind(exchange = _exc, queue = rmq_params.rmq_params['led_queue'])
 
 print('[Checkpoint] Bluetooth ready!')
 
-port = 3
+port = 3         #Arbitrary port declaration
 
-server_socket = BluetoothSocket(RFCOMM)
-server_socket.bind(("",port))
+ID = 100         #order ID will begin at 100 and increment as more orders are processed
 
-print('[Checkpoint] Waiting for connection on RFCOMM channel ' + str(port))
-server_socket.listen(1)
+while True:
+    ##begin bluetooth connections
+    server_socket = BluetoothSocket(RFCOMM)
+    server_socket.bind(("",port))
 
-client_info = server_socket.accept()
-client_socket,address = client_info
+    print('[Checkpoint] Waiting for connection on RFCOMM channel ' + str(port))
+    server_socket.listen(1)
 
-print('[Checkpoint] Accepted connection from (' + str(client_info[0]) + ',' + str(client_info[0]) + ')')
+    ##find the client
+    client_info = server_socket.accept()
+    client_socket,address = client_info
 
-#menu = '\ritem1:\r\t\t time: 6\r\t\t price: 2.25\r\r item2:\r\t\t time: 2\r\t\t price:4.5'
+    print('[Checkpoint] Accepted connection from ' + str(client_info[1]))
 
- 
+    ##sending LED that client connected
+    channel.basic_publish(exchange=_exc,
+            routing_key='led',
+            body='CC')
 
-_menu =""
+    _menu =""
+    for x,y in menu.menu.items():
+        temp = ""
+        temp+=x
+        for xx,yy in y.items():
+            temp = temp + ' ' + str(xx) + " " + str(yy)
+        _menu = _menu + "    " + temp
 
-for x,y in menu.menu.items():
-    temp = ""
-    temp+=x
-    for xx,yy in y.items():
-        temp = temp + ' ' + str(xx) + " " + str(yy)
-    _menu = _menu + " " + temp
+    client_socket.send(_menu)
 
-client_socket.send(_menu)
+    print('[Checkpoint] Sent menu: ' + _menu)
 
-print('[Checkpoint] Sent menu: ' + _menu)
+    #waiting for order back
+    data = client_socket.recv(1024)
+    data = data.decode('utf-8')
 
-#waiting for order back
+    print('[Checkpoint] Received order:' + str(data))
 
-data = client_socket.recv(1024)
-data = data.decode('utf-8')
+    data = [str(i) for i in data.split()]
 
-print('[Checkpoint] Received order:' + str(data))
+    price = 0
+    time = 0
+    vals = ''
+    for x in range (0,len(data)):
+        if data[x] in menu.menu.keys():
+            vals =  vals + str(data[x]) + ' '
+            p = menu.menu[data[x]]['price']
+            t = menu.menu[data[x]]['time']
+            price += float(p)                    #get the total price of all items
+            time += float(t)                     #get the total time to process all items
+            
+    channel.queue_declare(queue=str(ID), auto_delete = True)        #declare a queue based on the current client
+    channel.queue_bind(exchange = _exc, queue = str(ID))
+    
+         ##sending data to the client        
+    client_socket.send(str(ID))       #Order ID
+    client_socket.send(str(data))       #Items list
+    client_socket.send(str(price))      #price
+    client_socket.send(str(time))       #time
 
+        ##send receipt
+    print('[Checkpoint] Sent receipt: ')
+    print('Order ID: ' + str(ID))
+    print('Items: ' + str(data))
+    print('Total Price: ' + str(price))
+    print('Total Time: ' + str(time))
 
-data = [str(i) for i in data.split()]
+        ##sending order to the processor
+    channel.basic_publish(exchange=_exc,
+            routing_key='order',
+            body=str(str(ID) + ';' + vals))
+        ##sending LED that order was sent
+    channel.basic_publish(exchange=_exc,
+            routing_key='led',
+            body='OSe')
+        ##sending CLIENT that the order is being processed
+    channel.basic_publish(exchange = _exc,
+            routing_key = str(ID),
+            body='The order has been submitted.')
 
-price = 0
-time = 0
+        ##close the bluetooth 
+    server_socket.close()
+    print('[Checkpoint] Closed Bluetooth Connection')
 
-for x in range (0,len(data)):
-    if data[x] in menu.menu.keys():
-        p = menu.menu[data[x]]['price']
-        t = menu.menu[data[x]]['time']
-        price += float(p)
-        time += float(t)
-        
-     
-        
-client_socket.send(ID)       #Order ID
-client_socket.send(str(data))       #Items list
-client_socket.send(str(price))      #price
-client_socket.send(str(time))       #time
+    ##sending LED that it was disconnected
+    channel.basic_publish(exchange=_exc,
+            routing_key='led',
+            body='CD')
 
-print('[Checkpoint] Sent receipt: ')
-print('Order ID: ' + ID)
-print('Items: ' + str(data))
-print('Total Price: ' + str(price))
-print('Total Time: ' + str(time))
+    #connection.close() #after sending the data to queue
 
-server_socket.close()
-print('[Checkpoint] Closed Bluetooth Connection')
-
-
-
-
+    ID += 1      #move on to the next order
 
 
 
